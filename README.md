@@ -92,6 +92,7 @@ credentials to Redshift for the COPY command:
             "Sid": "Stmt1424787824000",
             "Effect": "Allow",
             "Action": [
+                "cloudwatch:PutMetricData",
                 "dynamodb:DeleteItem",
                 "dynamodb:DescribeTable",
                 "dynamodb:GetItem",

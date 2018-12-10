@@ -41,6 +41,10 @@ var sns = new aws.SNS({
     apiVersion: '2010-03-31',
     region: region
 });
+var cloudWatch = new aws.CloudWatch({
+    apiVersion: '2010-08-01',
+    region: region
+});
 require('./constants');
 var kmsCrypto = require('./kmsCrypto');
 kmsCrypto.setRegion(region);
@@ -1009,6 +1013,7 @@ exports.handler = function (event, context) {
      *
      */
     exports.loadCluster = function (config, thisBatchId, s3Info, manifestInfo, clusterInfo, callback) {
+        var start = Date.now();
         /* build the redshift copy command */
         var copyCommand = '';
 
@@ -1207,7 +1212,10 @@ exports.handler = function (event, context) {
                          * backoff from 30ms with 5 retries - giving a max retry
                          * duration of ~ 1 second
                          */
-                        exports.runPgCommand(clusterInfo, client, done, copyCommand, 5, ["S3ServiceException:The specified key does not exist.,Status 404"], 30, callback);
+                        exports.runPgCommand(clusterInfo, client, done, copyCommand, 5, ["S3ServiceException:The specified key does not exist.,Status 404"], 30, function(err, results){
+                          exports.durationMetric(Date.now() - start, s3Info.prefix, thisBatchId, function(err) {});
+                          callback(err, results);
+                        });
                     }
                 });
             }
@@ -1377,6 +1385,28 @@ exports.handler = function (event, context) {
 
         sns.publish(m, function (err, data) {
             callback(err);
+        });
+    };
+
+    exports.durationMetric = function(duration, s3Prefix, batchId, callback) {
+        var params = {
+          MetricData: [
+            {
+              MetricName: 'Copy Duration',
+              Dimensions: [
+                {
+                  Name: 'S3 Prefix',
+                  Value: s3Prefix
+                }
+              ],
+              Unit: 'Milliseconds',
+              Value: duration,
+            }
+          ],
+          Namespace: 'Redshift Loader'
+        };
+        cloudWatch.putMetricData(params, function(err, data){
+          callback(err);
         });
     };
 
